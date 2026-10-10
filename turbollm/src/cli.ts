@@ -33,6 +33,7 @@ import {
   writeRunState,
 } from './app-update-apply'
 import { applyEngineUpdate } from './engines/update-apply'
+import { engineWorkBusy } from './api/routes'
 import { seedDefaultEngines, ensureAndroidBundledEngine } from './engines/seed'
 import { runAutoLoad } from './engines/auto-load'
 import { Scanner } from './models/scanner'
@@ -920,7 +921,7 @@ const updateScheduler = new UpdateScheduler({
   updates,
   applyUpdate: async (engine) => {
     if (comfy.isBlocked()) return // ComfyUI owns the GPU — don't swap engines under it
-    await applyEngineUpdate({ store, registry, manager, provision }, engine)
+    await applyEngineUpdate({ store, registry, manager, provision, updates, workBusy: () => engineWorkBusy(deps) }, engine)
   },
 })
 updateScheduler.start()
