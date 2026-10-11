@@ -202,23 +202,66 @@ export function inflateEntry(buf: Buffer, entry: ZipEntry): Buffer {
   return data
 }
 
-/** Extract EVERY file member of a zip into destDir (the Linux/Android `.zip` extractor: GNU tar
- *  cannot read zip and `unzip` is optional there). Directories are created, symlink members are
- *  skipped (never created, never followed), and a member whose normalised path would land outside
- *  destDir is refused with ZipError('bad_zip') before anything for it is written. */
+/** Written into every dir the upload flow creates; see zip-install.ts. Defined in this leaf so
+ *  the extractors can refuse to carry one in from an archive. */
+export const ZIP_BUILD_MARKER = '.turbollm-zip-install'
+
+/** Written last into a staged release install; the only proof of release provenance. */
+export const RELEASE_INSTALL_MARKER = '.turbollm-release-install'
+
+/** True for a member whose basename is one of this app's own install markers. An archive or
+ *  scanned folder must never supply one: the marker is trusted as proof of how a dir was made. */
+export function isInstallMarkerName(memberName: string): boolean {
+  const base = posix.basename(memberName.replaceAll('\\', '/'))
+  return base === ZIP_BUILD_MARKER || base === RELEASE_INSTALL_MARKER
+}
+
+const MAX_LINK_CHAIN = 8
+
+/** Extract EVERY file member of a zip into destDir (the Linux/Android .zip extractor: GNU tar
+ *  cannot read zip and unzip is optional there). Directories are created; a symlink member is
+ *  written as a copy of the file its link text names when that file is a member inside destDir
+ *  (the way the tar walk dereferences in-root links), and dropped otherwise — never created as
+ *  a link, never followed outside the tree. A member whose normalised path would land outside
+ *  destDir is refused with ZipError('bad_zip') before anything for it is written. Install
+ *  markers are never extracted. */
 export function extractZipAll(buf: Buffer, destDir: string): void {
   const root = resolve(destDir)
   mkdirSync(root, { recursive: true })
-  for (const entry of readZipEntries(buf)) {
-    if (entry.symlink) continue
-    const target = containedPath(root, entry.name)
-    if (entry.isDir) {
-      mkdirSync(target, { recursive: true })
-      continue
-    }
-    mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, inflateEntry(buf, entry))
+  const entries = readZipEntries(buf).filter((e) => !isInstallMarkerName(e.name))
+  const byPath = new Map(entries.map((e) => [containedPath(root, e.name), e]))
+  for (const [target, entry] of byPath) {
+    if (entry.isDir) mkdirSync(target, { recursive: true })
+    else if (!entry.symlink) writeMember(target, inflateEntry(buf, entry))
   }
+  for (const [target, entry] of byPath) {
+    const real = entry.symlink ? resolveLinkedFile(buf, root, byPath, target, entry, 0) : null
+    if (real) writeMember(target, inflateEntry(buf, real))
+  }
+}
+
+function writeMember(target: string, data: Buffer): void {
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, data)
+}
+
+/** The regular-file member a symlink member ultimately names, or null when the link dangles,
+ *  loops, or points outside root. */
+function resolveLinkedFile(
+  buf: Buffer,
+  root: string,
+  byPath: Map<string, ZipEntry>,
+  linkPath: string,
+  link: ZipEntry,
+  depth: number,
+): ZipEntry | null {
+  if (depth > MAX_LINK_CHAIN) return null
+  const linkText = inflateEntry(buf, link).toString('utf8')
+  const targetPath = resolve(dirname(linkPath), linkText.replaceAll('\\', '/'))
+  const insideRoot = !posix.isAbsolute(linkText) && !/^[A-Za-z]:/.test(linkText) && targetPath.startsWith(root + sep)
+  const target = insideRoot ? byPath.get(targetPath) : undefined
+  if (!target || target.isDir) return null
+  return target.symlink ? resolveLinkedFile(buf, root, byPath, targetPath, target, depth + 1) : target
 }
 
 function containedPath(root: string, memberName: string): string {

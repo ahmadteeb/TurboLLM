@@ -386,7 +386,7 @@ const ENGINE_META: Record<string, EngineMeta> = {
       'Tracks upstream llama.cpp closely (per-commit builds)',
       'Same llama-server API + GGUF flow',
     ],
-    cons: ['Niche — most value only for ternary/BitNet-class models', 'No install endpoint yet — build from source', 'Small community'],
+    cons: ['Niche — most value only for ternary/BitNet-class models','Small community'],
   },
   beellama: {
     icon: Layers,
@@ -397,7 +397,7 @@ const ENGINE_META: Record<string, EngineMeta> = {
       'KV precision tail keeps recent tokens exact, cheaply',
       'Adaptive DFlash speculative decoding',
     ],
-    cons: ['Solo maintainer, fast churn (v0.4.0 dropped TurboQuant/TCQ)', 'No install endpoint yet — build from source', 'KVarN types are manual-pick only, not in the auto-tune sweep yet'],
+    cons: ['Solo maintainer, fast churn (v0.4.0 dropped TurboQuant/TCQ)','KVarN types are manual-pick only, not in the auto-tune sweep yet'],
   },
 }
 

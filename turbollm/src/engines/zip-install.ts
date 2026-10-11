@@ -32,9 +32,9 @@ import { basename, join, sep } from 'node:path'
 import { asDirName, isEngineInBuildDir } from './build-runner'
 import { serverBinName, suggestEngineName } from './scan'
 import { probe, type ProbeResult } from './probe'
-import { inflateEntry, readZipEntries, ZipError, type ArchiveMember, type ZipEntry } from './zip-reader'
+import { inflateEntry, isInstallMarkerName, readZipEntries, RELEASE_INSTALL_MARKER, ZIP_BUILD_MARKER, ZipError, type ArchiveMember, type ZipEntry } from './zip-reader'
 
-export { crc32, extractZipAll, inflateEntry, readZipEntries, ZipError } from './zip-reader'
+export { crc32, extractZipAll, inflateEntry, readZipEntries, RELEASE_INSTALL_MARKER, ZIP_BUILD_MARKER, ZipError } from './zip-reader'
 export type { ArchiveMember, ZipEntry, ZipErrorCode } from './zip-reader'
 
 /** Hard cap on an uploaded zip's compressed bytes. Enforced three times: while the body
@@ -42,17 +42,6 @@ export type { ArchiveMember, ZipEntry, ZipErrorCode } from './zip-reader'
  *  so a lying Content-Length or a chunked request can't buffer an unbounded blob. Real
  *  llama.cpp builds land well under this even with CUDA runtimes. */
 export const MAX_ZIP_BYTES = 2 * 1024 * 1024 * 1024
-
-/** Written into every dir this flow creates: routes.ts only replaces an OCCUPIED build
- *  folder that carries it (it is the proof the folder is this flow's own prior install,
- *  not a 1-click git build whose directory name happens to collide), and the GC sweep only
- *  removes unclaimed dirs that do. Nothing loads it. */
-export const ZIP_BUILD_MARKER = '.turbollm-zip-install'
-
-/** The release-install flow's counterpart of ZIP_BUILD_MARKER: written last into a staged
- *  release install, so its presence means that flow completed the dir. Defined here, next to
- *  the GC that sweeps it, and re-exported by release-install.ts. */
-export const RELEASE_INSTALL_MARKER = '.turbollm-release-install'
 
 /** A zip install newer than this survives the GC sweep — another tab may still be sitting
  *  on its confirm step. */
@@ -142,7 +131,7 @@ export function pickInstallFiles<T extends ArchiveMember>(
   const files = new Map<string, T>()
   const add = (e: T) => {
     const base = baseOf(e.name)
-    if (unwritableBase(base)) return
+    if (unwritableBase(base) || isInstallMarkerName(base)) return
     const key = base.toLowerCase()
     if (!files.has(key)) files.set(key, e)
   }

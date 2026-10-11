@@ -148,6 +148,15 @@ test('pickZipFiles: binary at any depth; same-dir files + platform libs anywhere
   )
 })
 
+test('pickZipFiles: install-provenance markers in the binary dir are never selected', () => {
+  const entries = readZipEntries(
+    buildZipArchive([member('llama-server'), member('.turbollm-release-install'), member('.turbollm-zip-install'), member('libggml.so')]),
+  )
+  const sel = pickZipFiles(entries, 'linux', 'llama-server')
+  assert.ok(sel)
+  assert.deepEqual([...sel.files.keys()].sort(), ['libggml.so', 'llama-server'])
+})
+
 test('pickZipFiles: multiple binaries → shallowest wins, deterministically', () => {
   const entries = readZipEntries(
     buildZipArchive([member('deep/nested/dir/llama-server'), member('cuda/llama-server'), member('cuda/ggml.so')]),

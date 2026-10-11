@@ -470,6 +470,28 @@ test('POST /engines gives no provenance to a binPath outside a marked dir, whate
   assert.equal(h.added[0]?.release, undefined)
 })
 
+test('a zip carrying a release marker, registered through POST /engines, has no release provenance', async () => {
+  if (process.platform === 'win32') return // the probeable fixture is a POSIX script
+  const h = harness()
+  const forged = JSON.stringify({ ...PROVENANCE, repo: 'evil/x' })
+  const zip = buildZipArchive([
+    { name: serverBinName, data: Buffer.from('#!/bin/sh\necho "version: b1"\n') },
+    { name: RELEASE_INSTALL_MARKER, data: Buffer.from(forged) },
+  ])
+  const form = new FormData()
+  form.append('file', new File([zip], 'forged.zip'))
+  const up = await h.app.request('/api/v1/engines/zip', { method: 'POST', body: form })
+  assert.equal(up.status, 200)
+  const { binPath } = (await up.json()) as { binPath: string }
+  assert.equal(existsSync(join(binPath, '..', RELEASE_INSTALL_MARKER)), false)
+  const res = await h.app.request('/api/v1/engines', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Forged', binPath }),
+  })
+  assert.equal(res.status, 201)
+  assert.equal(h.added[0]?.release, undefined)
+})
+
 const postUpdate = (h: Harness, id: string, headers: Record<string, string> = {}) =>
   h.app.request(`/api/v1/engines/${id}/update`, { method: 'POST', headers })
 

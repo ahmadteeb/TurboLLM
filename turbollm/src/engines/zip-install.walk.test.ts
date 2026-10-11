@@ -62,10 +62,38 @@ test('extractZipAll: directory members become directories, not files', () => {
   assert.ok(lstatSync(join(dest, 'x', 'f.txt')).isFile())
 })
 
-test('extractZipAll: symlink members are skipped', () => {
+function link(name: string, target: string): ZipMember {
+  return { name, data: Buffer.from(target), symlink: true }
+}
+
+test('extractZipAll: an in-root symlink member is materialised as a copy of its target bytes', () => {
   const dest = join(tmpDir('zip-all-'), 'out')
-  extractZipAll(buildZipArchive([member('real.so', 'bytes'), { name: 'link.so', data: Buffer.from('real.so'), symlink: true }]), dest)
-  assert.deepEqual(everythingUnder(dest), ['real.so'])
+  extractZipAll(buildZipArchive([member('lib/libllama.so.0.0.1', 'bytes'), link('lib/libllama.so.0', 'libllama.so.0.0.1')]), dest)
+  assert.deepEqual(everythingUnder(dest).sort(), ['lib', 'lib/libllama.so.0', 'lib/libllama.so.0.0.1'])
+  assert.ok(lstatSync(join(dest, 'lib', 'libllama.so.0')).isFile(), 'a regular file, not a link')
+  assert.equal(readFileSync(join(dest, 'lib', 'libllama.so.0'), 'utf8'), 'bytes')
+})
+
+test('extractZipAll: a chain of in-root symlinks resolves to the final file', () => {
+  const dest = join(tmpDir('zip-all-'), 'out')
+  extractZipAll(buildZipArchive([link('a.so.0', 'a.so.0.1'), link('a.so.0.1', 'a.so.0.1.2'), member('a.so.0.1.2', 'real')]), dest)
+  assert.equal(readFileSync(join(dest, 'a.so.0'), 'utf8'), 'real')
+})
+
+for (const hostile of ['../secret', '/etc/passwd', 'C:/secret', 'missing.so', 'loop.so']) {
+  test('extractZipAll: a symlink member pointing at ' + hostile + ' is dropped and nothing escapes', () => {
+    const parent = tmpDir('zip-all-')
+    const dest = join(parent, 'out')
+    extractZipAll(buildZipArchive([member('real.so', 'bytes'), link('link.so', hostile), link('loop.so', 'loop.so')]), dest)
+    assert.deepEqual(everythingUnder(dest), ['real.so'])
+    assert.deepEqual(readdirSync(parent), ['out'])
+  })
+}
+
+test('extractZipAll: never writes a release or zip install marker, whoever supplied it', () => {
+  const dest = join(tmpDir('zip-all-'), 'out')
+  extractZipAll(buildZipArchive([member('real.so', 'bytes'), member('.turbollm-release-install', '{}'), member('sub/.turbollm-zip-install', 'x')]), dest)
+  assert.deepEqual(everythingUnder(dest).filter((p) => !p.endsWith('sub')), ['real.so'])
 })
 
 test('walkArchiveMembers: reports posix-relative file names and skips directories', () => {

@@ -7,6 +7,7 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import { modelsRefetchInterval } from './models-poll'
 import {
   activateEngine,
@@ -460,14 +461,23 @@ export function useBackendInstall() {
 
 /** Honest per-engine update status (ADR-085, Phase 6). Offline-first: serves the cache,
  *  never a fabricated "latest". Polls while a provision/update is active so a freshly
- *  applied update flips hasUpdate off. */
+ *  applied update flips hasUpdate off. Also refetches once when the run settles, so a
+ *  finish between two polls still clears the badge. */
 export function useEngineUpdates(provisioning = false): UseQueryResult<EngineUpdates> {
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.engineUpdates,
     queryFn: () => getEngineUpdates(false),
     refetchInterval: provisioning ? 3000 : false,
     retry: false,
   })
+  const refetch = query.refetch
+  const wasProvisioning = useRef(provisioning)
+  useEffect(() => {
+    const settled = wasProvisioning.current && !provisioning
+    wasProvisioning.current = provisioning
+    if (settled) void refetch()
+  }, [provisioning, refetch])
+  return query
 }
 
 /** App self-update check (F-006, ADR-031). Offline-first: serves the daemon's 24h cache,

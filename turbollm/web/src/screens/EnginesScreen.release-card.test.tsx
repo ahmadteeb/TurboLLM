@@ -272,4 +272,15 @@ describe('EnginesScreen: a catalog card that owns a release engine', () => {
     const bee = await cardOf('BeeLlama')
     expect(within(bee).getByRole('button', { name: /Install prebuilt/ })).toBeTruthy()
   })
+
+  it('B-13: cards offering Install prebuilt do not claim there is no install endpoint', async () => {
+    state.catalog = [PRISM_CATALOG, BEE_CATALOG]
+    state.fits = [fitFor(PRISM_CATALOG), fitFor(BEE_CATALOG)]
+    renderScreen()
+    for (const name of ['Prism', 'BeeLlama']) {
+      const card = await cardOf(name)
+      expect(within(card).getByRole('button', { name: /Install prebuilt/ })).toBeTruthy()
+      expect(within(card).queryByText(/No install endpoint/)).toBeNull()
+    }
+  })
 })
