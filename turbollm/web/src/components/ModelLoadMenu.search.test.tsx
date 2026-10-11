@@ -350,6 +350,28 @@ describe('shortcuts with focus in the box', () => {
   })
 })
 
+describe('searching by source repo', () => {
+  const withRepos = LOCAL.map((m, i) => ({
+    ...m,
+    key: ['gemma-27b|q4_k_m|16000000000', 'qwen3-35b|q4_k_m|13211155424', 'qwen3-8b|q8_0|8800000000'][i],
+    sourceRepo: i === 0 ? 'google/gemma-27b-GGUF' : 'unsloth/Qwen3-GGUF',
+  })) as unknown as ModelEntry[]
+
+  it('finds models by the owner of their source repo', async () => {
+    await openMenu({ models: withRepos })
+    await userEvent.keyboard('unsloth')
+    expect(screen.getByText('Qwen3 35B')).toBeInTheDocument()
+    expect(screen.queryByText('Gemma 27B')).not.toBeInTheDocument()
+  })
+
+  it('does not match digits of the size in the model key', async () => {
+    await openMenu({ models: withRepos })
+    await userEvent.keyboard('132')
+    expect(screen.queryByText('Qwen3 35B')).not.toBeInTheDocument()
+    expect(screen.getByText('No matching models')).toBeInTheDocument()
+  })
+})
+
 const REMOTE_ID = 'workstation/qwen3-35b'
 const onlineLink = () => [link({ id: 'l1', name: 'workstation' })]
 const activeRows = () => Array.from(document.querySelectorAll('[data-active]'))

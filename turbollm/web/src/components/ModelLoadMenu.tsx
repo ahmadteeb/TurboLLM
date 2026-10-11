@@ -91,11 +91,12 @@ export function ModelLoadMenu({
   // All of the "which group, what does the user read, is this row pickable and why not"
   // logic lives in the PURE helper (lib/remote-models.ts) and is unit-tested there; this
   // component only renders what it returns.
+  const repoByKey = new Map(loadable.flatMap((m) => (m.sourceRepo ? [[m.key, m.sourceRepo] as const] : [])))
   const groups = groupModelChoices({ local: loadable, links: links ?? [], remote: remoteModels ?? [] })
   const flat = isFlat(groups)
   const total = groups.reduce((n, g) => n + g.choices.length, 0)
   const searching = query.trim() !== ''
-  const { groups: shown, choices } = filterModelGroups(groups, query)
+  const { groups: shown, choices } = filterModelGroups(groups, query, repoByKey)
   const nothingMatches = searching && shown.length === 0
   const targets: PickTarget[] = loadedKey ? [...choices, EJECT_KEY] : choices
   const targetKeys = targets.map(keyOfTarget)
@@ -251,7 +252,7 @@ export function ModelLoadMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align={align}
-        className="max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] w-[280px] scroll-pt-9 overflow-y-auto"
+        className="max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] w-[280px] scroll-pt-11 overflow-y-auto"
         {...focusSearchOnOpen}
         onCloseAutoFocus={(e) => {
           // Radix would hand focus back to the trigger and steal it from the settings dialog.

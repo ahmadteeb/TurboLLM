@@ -12,20 +12,23 @@ export function queryTokens(query: string): string[] {
   return query.toLowerCase().split(/\s+/).filter(Boolean)
 }
 
-/** True when every token is a substring of the choice's name, quant, machine or id.
- *  The local id is the model key, which carries the repo/owner path. */
-export function choiceMatches(choice: ModelChoice, tokens: string[]): boolean {
-  const searchable = [choice.name, choice.quant ?? '', choice.machine ?? '', choice.id].join(' ').toLowerCase()
+/** Source repo (`owner/repo`) of each local model, by choice id. Remote models have none. */
+export type RepoByKey = ReadonlyMap<string, string>
+
+/** True when every token is a substring of the choice's name, quant, machine or source repo.
+ *  Never the id: a local id is `name|quant|sizeBytes`, so searching it would match size digits. */
+export function choiceMatches(choice: ModelChoice, tokens: string[], sourceRepo?: string | null): boolean {
+  const searchable = [choice.name, choice.quant ?? '', choice.machine ?? '', sourceRepo ?? ''].join(' ').toLowerCase()
   return tokens.every((token) => searchable.includes(token))
 }
 
-export function filterModelGroups(groups: ModelGroup[], query: string): FilteredPicker {
+export function filterModelGroups(groups: ModelGroup[], query: string, repoByKey?: RepoByKey): FilteredPicker {
   const tokens = queryTokens(query)
   if (tokens.length === 0) return { groups, choices: groups.flatMap((g) => g.choices) }
 
   const shown: ModelGroup[] = []
   for (const group of groups) {
-    const choices = group.choices.filter((c) => choiceMatches(c, tokens))
+    const choices = group.choices.filter((c) => choiceMatches(c, tokens, c.remote ? null : repoByKey?.get(c.id)))
     if (choices.length > 0 || isMachineNamedBy(group, tokens)) shown.push({ ...group, choices })
   }
   return { groups: shown, choices: shown.flatMap((g) => g.choices) }

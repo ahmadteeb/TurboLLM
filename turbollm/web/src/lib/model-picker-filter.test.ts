@@ -40,9 +40,24 @@ describe('choiceMatches', () => {
     ['name', 'gemma', gemma],
     ['quant', 'q8_0', qwen8],
     ['machine', 'workstation', remoteQwen],
-    ['key owner', 'unsloth', qwen35],
   ])('matches by %s', (_label, token, c) => {
     expect(choiceMatches(c, [token])).toBe(true)
+  })
+
+  it('matches the source repo owner and repo when one is given', () => {
+    expect(choiceMatches(qwen35, ['unsloth'], 'unsloth/Qwen3-35B-GGUF')).toBe(true)
+    expect(choiceMatches(qwen35, ['gguf'], 'unsloth/Qwen3-35B-GGUF')).toBe(true)
+  })
+
+  it('does not match an owner when no source repo is known', () => {
+    expect(choiceMatches(qwen35, ['unsloth'])).toBe(false)
+    expect(choiceMatches(qwen35, ['unsloth'], null)).toBe(false)
+  })
+
+  it('never matches the raw key, so size digits in a local key do not match', () => {
+    const local = choice({ id: 'qwen3.6-35b-a3b|q4_k_m|13211155424', name: 'Qwen3.6 35B', quant: 'Q4_K_M' })
+    expect(choiceMatches(local, ['132'])).toBe(false)
+    expect(choiceMatches(local, ['13211155424'])).toBe(false)
   })
 
   it('requires every token (AND)', () => {
@@ -58,6 +73,12 @@ describe('choiceMatches', () => {
 })
 
 describe('filterModelGroups', () => {
+  it('finds a local model by the owner in its source repo, looked up by key', () => {
+    const repos = new Map([[qwen35.id, 'unsloth/Qwen3-35B-GGUF']])
+    const result = filterModelGroups([local([gemma, qwen35]), machine([remoteQwen])], 'unsloth', repos)
+    expect(result.choices).toEqual([qwen35])
+  })
+
   it('returns the groups unchanged for a blank query', () => {
     const groups = [local([gemma, qwen35]), machine([remoteQwen])]
     const result = filterModelGroups(groups, '  ')
