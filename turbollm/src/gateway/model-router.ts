@@ -254,6 +254,16 @@ export class ModelRouter {
     return ids
   }
 
+  /** How many extra pool slots run on `engineId` (read-only). A release update refuses to replace that engine's
+   *  files while this is above zero, rather than stopping a model the user is using. */
+  poolSlotsOnEngine(engineId: string): number {
+    let count = 0
+    for (const slot of this.extraSlots.values()) {
+      if (slot.manager.currentOpts()?.engine.id === engineId) count++
+    }
+    return count
+  }
+
   /** Stop and drop every extra pool slot running on `engineId`, resolving once they have exited — before that
    *  engine's files are replaced or it is unregistered. The primary is the caller's (stopEngineUsers). */
   async stopPoolSlotsOnEngine(engineId: string): Promise<void> {

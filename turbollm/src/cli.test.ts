@@ -12,3 +12,8 @@ test('the auto-update scheduler asks the engine-work slot before applying an upd
   assert.match(call, /workBusy:\s*\(\)\s*=>\s*engineWorkBusy\(deps\)/)
   assert.match(source, /import \{ engineWorkBusy \} from '\.\/api\/routes'/)
 })
+
+test('the auto-update scheduler hands the model router to the update so pool slots are honoured', () => {
+  const call = source.match(/applyEngineUpdate\(\{[^}]*\}\s*,\s*engine\)/)?.[0] ?? ''
+  assert.match(call, /\bmodelRouter\b/)
+})

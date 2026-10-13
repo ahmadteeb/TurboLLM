@@ -57,7 +57,7 @@ import {
   tagFromManagedBinPath,
   latestTagForInstalled,
 } from '../engines/update'
-import { applyEngineUpdate, recordReleaseUpdate } from '../engines/update-apply'
+import { applyEngineUpdate, recordReleaseUpdate, releaseSwapBlockReason } from '../engines/update-apply'
 import { checkApplyBlockers, currentRunState, detectInstall, spawnUpdateHelper } from '../app-update-apply'
 import { emit } from '../telemetry/runtime/typed-emit'
 import { appUpdateClicked } from '../telemetry/events/app-update'
@@ -1454,10 +1454,11 @@ export function registerApi(app: Hono, d: Deps): void {
     if (occupant && !existsSync(join(targetDir, RELEASE_INSTALL_MARKER)))
       return err(c, 409, 'build_dir_taken', `The build folder "${slug}" already belongs to "${occupant.name}" — delete that engine first.`)
     const replaceBlocked = (): string | null => {
-      const r = d.registry.active()
-      return r && engineBusy(d) && claims(r.binPath)
-        ? `Stop "${r.name}" before replacing its files — the install extracts over its build folder.`
-        : null
+      for (const occupantEngine of d.registry.list().engines.filter((e) => claims(e.binPath))) {
+        const reason = releaseSwapBlockReason(d, occupantEngine)
+        if (reason) return reason
+      }
+      return null
     }
     const early = replaceBlocked()
     if (early) return err(c, 409, 'engine_in_use', early)
@@ -1641,7 +1642,7 @@ export function registerApi(app: Hono, d: Deps): void {
     engineUpdateInFlight = true
     const startsBefore = d.provision.startCount()
     void applyEngineUpdate(
-      { store: d.store, registry: d.registry, manager: d.manager, provision: d.provision, updates: d.updates, trigger: 'user_update' },
+      { store: d.store, registry: d.registry, manager: d.manager, provision: d.provision, updates: d.updates, modelRouter: d.modelRouter, trigger: 'user_update' },
       engine,
       ac.signal,
     )

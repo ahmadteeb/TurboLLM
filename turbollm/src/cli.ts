@@ -922,7 +922,7 @@ const updateScheduler = new UpdateScheduler({
   updates,
   applyUpdate: async (engine) => {
     if (comfy.isBlocked()) return // ComfyUI owns the GPU — don't swap engines under it
-    await applyEngineUpdate({ store, registry, manager, provision, updates, workBusy: () => engineWorkBusy(deps) }, engine)
+    await applyEngineUpdate({ store, registry, manager, provision, updates, modelRouter, workBusy: () => engineWorkBusy(deps) }, engine)
   },
 })
 updateScheduler.start()

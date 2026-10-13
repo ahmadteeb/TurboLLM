@@ -30,6 +30,8 @@ interface Opts {
   lanBind?: boolean
   busy?: 'download' | 'build'
   runningBinPath?: string
+  /** Engine id an extra pool slot is running on (the primary is stopped). */
+  poolEngineId?: string
   engines?: Array<{ id: string; name: string; binPath: string; release?: ReleaseProvenance }>
   customSources?: Array<{ name: string; binPath: string }>
 }
@@ -70,6 +72,10 @@ function harness(o: Opts = {}): Harness {
       fail: (m: string) => { realProvision.fail(m); provisionLog.push(`fail:${m}`) },
     },
     build: { isActive: () => o.busy === 'build' },
+    modelRouter: {
+      poolSlotsOnEngine: (id: string) => (id === o.poolEngineId ? 1 : 0),
+      stopPoolSlotsOnEngine: async () => {},
+    },
     registry: {
       active: () => (o.runningBinPath ? { id: 'e-run', name: 'Running', binPath: o.runningBinPath, kind: 'llama-server' } : undefined),
       list: () => ({ engines, activeEngineId: '' }),
@@ -635,4 +641,28 @@ test('POST install: an archive without a server binary ends the job with no_serv
     assert.equal(view.state, 'error')
     assert.equal(view.error?.code, 'no_server_binary')
   })
+})
+
+test('POST install: 409 engine_in_use when only an extra pool slot runs on the occupant', async () => {
+  const dataDir = tmpDir('tllm-rel-route-')
+  const dir = seededDir(dataDir, RELEASE_INSTALL_MARKER)
+  const h = harness({ dataDir, poolEngineId: 'e1', engines: [RELEASE_ENGINE(dir)] })
+  await withGithub({ tag: 'b1', assets: [{ name: ZIP_ASSET }] }, async () => {
+    const res = await postInstall(h)
+    assert.equal(res.status, 409)
+    assert.equal((await errorOf(res)).code, 'engine_in_use')
+  })
+  assert.deepEqual(h.provisionLog, [])
+})
+
+test('POST /engines/:id/update: an extra pool slot on the engine ends the update as a refusal, never a swap', async () => {
+  const dataDir = tmpDir('tllm-rel-route-')
+  const dir = seededDir(dataDir, RELEASE_INSTALL_MARKER)
+  const h = harness({ dataDir, poolEngineId: 'e1', engines: [RELEASE_ENGINE(dir)] })
+  await withGithub({ tag: 'b9', assets: [{ name: ZIP_ASSET, bytes: Buffer.alloc(64, 7) }] }, async (requests) => {
+    assert.equal((await postUpdate(h, 'e1')).status, 202)
+    await waitUntil(() => settled(h))
+    assert.equal(requests.some((u) => u.startsWith('https://cdn.test/')), false)
+  })
+  assert.match(h.provisionLog.find((l) => l.startsWith('fail:')) ?? '', /Stop "Rel"/)
 })

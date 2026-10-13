@@ -193,3 +193,41 @@ test('recordReleaseUpdate refreshes, records provenance, and tolerates no checke
   recordReleaseUpdate(h.deps.registry, undefined, 'e1', result)
   assert.deepEqual(h.releases, [{ id: 'e1', tag: 'b2' }])
 })
+
+function poolRouter(engineId: string, calls: string[]): NonNullable<UpdateApplyDeps['modelRouter']> {
+  return {
+    poolSlotsOnEngine: (id: string) => (id === engineId ? 1 : 0),
+    stopPoolSlotsOnEngine: async () => { calls.push('stop-pool') },
+  }
+}
+
+test('an extra pool slot running on the engine refuses the update before any fetch or job, and never stops it', async () => {
+  const h = harness()
+  const gh = fakeGithub([NEWER])
+  await assert.rejects(
+    applyEngineUpdate({ ...h.deps, fetchImpl: gh.fetchImpl, modelRouter: poolRouter('e1', h.calls) }, h.engine),
+    /Stop "Rel" before/,
+  )
+  assert.equal(gh.requests.length, 0)
+  assert.deepEqual(h.calls, [])
+  assert.equal(readFileSync(join(h.slugDir, serverBinName), 'utf8'), 'OLD')
+})
+
+test('a pool slot on a different engine does not block the update', async () => {
+  const h = harness()
+  await applyEngineUpdate({ ...h.deps, fetchImpl: fakeGithub([NEWER]).fetchImpl, modelRouter: poolRouter('other', h.calls) }, h.engine)
+  assert.equal(h.refreshed.length, 1)
+})
+
+test('a pool slot started during the download blocks the swap and keeps the old build', async () => {
+  const h = harness()
+  let poolRunning = false
+  const modelRouter = { poolSlotsOnEngine: () => (poolRunning ? 1 : 0), stopPoolSlotsOnEngine: async () => {} }
+  const probe = async () => { poolRunning = true; return PROBE_OK }
+  await assert.rejects(
+    applyEngineUpdate({ ...h.deps, probeFn: probe, fetchImpl: fakeGithub([NEWER]).fetchImpl, modelRouter }, h.engine),
+    /Stop/,
+  )
+  assert.equal(readFileSync(join(h.slugDir, serverBinName), 'utf8'), 'OLD')
+  assert.deepEqual(h.refreshed, [])
+})

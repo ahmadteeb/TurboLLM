@@ -57,8 +57,11 @@ export interface UpdateApplyDeps {
   /** Cached update statuses; a finished release update drops its engine's entry. */
   updates?: UpdateChecker
   /** Optional: when present, pool slots running on the engine being updated are stopped too. */
-  modelRouter?: Pick<ModelRouter, 'stopPoolSlotsOnEngine'>
+  modelRouter?: Pick<ModelRouter, 'stopPoolSlotsOnEngine' | 'poolSlotsOnEngine'>
 }
+
+/** What the swap guard reads: who is running, and which engine is active. */
+export type SwapGuardDeps = Pick<UpdateApplyDeps, 'registry' | 'manager' | 'modelRouter'>
 
 const OFFICIAL_LLAMA_REPO = 'ggml-org/llama.cpp'
 const isManagedLlama = (binPath: string) => /[\\/]engines[\\/]llama\.cpp-/.test(binPath)
@@ -89,6 +92,8 @@ async function applyReleaseUpdate(
   d: UpdateApplyDeps, engine: Engine, installed: ReleaseProvenance, root: string, signal?: AbortSignal,
 ): Promise<void> {
   if (d.workBusy?.()) return // another engine job owns the slot; the next scheduler tick retries
+  const poolBlock = poolSlotBlockReason(d, engine)
+  if (poolBlock) throw new Error(poolBlock)
   const newer = await newestMatchingRelease(installed, signal, d.fetchImpl)
   if (!newer || newer.tag === installed.tag) return
 
@@ -103,7 +108,7 @@ async function applyReleaseUpdate(
         fetchImpl: d.fetchImpl,
         signal,
         slug: installedSlug(engine, installed, root),
-        blockSwap: () => swapBlockedByRunningEngine(d, engine),
+        blockSwap: () => releaseSwapBlockReason(d, engine),
         onProgress: (p) => d.provision.progress(p.phase, p.pct, p.part, p.parts),
       },
     )
@@ -137,12 +142,26 @@ export function recordReleaseUpdate(
   updates?.forget(engineId)
 }
 
-/** The engine may have been started during the download; never swap files out from under it. */
-function swapBlockedByRunningEngine(d: UpdateApplyDeps, engine: Engine): string | null {
+/** Why replacing the engine's build folder must wait, or null. Refuses rather than stopping a model the user is
+ *  using (ADR-453): the primary slot and every extra pool slot count. Re-run at the swap, since the engine may
+ *  have been started during the download. */
+export function releaseSwapBlockReason(d: SwapGuardDeps, engine: Pick<Engine, 'id' | 'name'>): string | null {
+  return primarySlotBlockReason(d, engine) ?? poolSlotBlockReason(d, engine)
+}
+
+function primarySlotBlockReason(d: SwapGuardDeps, engine: Pick<Engine, 'id' | 'name'>): string | null {
   const state = d.manager.status().state
   const running = state === 'running' || state === 'starting' || state === 'stopping'
   if (!running || d.registry.active()?.id !== engine.id) return null
-  return `Stop "${engine.name}" before updating its files — the update replaces its build folder.`
+  return stopBeforeReplacingMessage(engine)
+}
+
+function poolSlotBlockReason(d: SwapGuardDeps, engine: Pick<Engine, 'id' | 'name'>): string | null {
+  return d.modelRouter?.poolSlotsOnEngine(engine.id) ? stopBeforeReplacingMessage(engine) : null
+}
+
+function stopBeforeReplacingMessage(engine: Pick<Engine, 'name'>): string {
+  return `Stop "${engine.name}" before replacing its files — its build folder is being replaced.`
 }
 
 /** Official llama.cpp: download the real latest tag into its own dir, probe, then swap
