@@ -150,6 +150,22 @@ describe('resolveActiveIndex', () => {
     ['no key, blank -> none', null, ['a', 'E'], 1, false, -1],
     ['no key, nothing visible -> none', null, [], 0, true, -1],
   ] as const)('%s', (_label, activeKey, targetKeys, choiceCount, hasQuery, expected) => {
-    expect(resolveActiveIndex(activeKey, [...targetKeys], choiceCount, hasQuery)).toBe(expected)
+    expect(resolveActiveIndex(activeKey, [...targetKeys], choiceCount, hasQuery, new Set())).toBe(expected)
+  })
+
+  describe('with disabled rows', () => {
+    it.each([
+      ['default skips a disabled first match', null, ['a', 'b', 'c', 'E'], 3, ['a'], 1],
+      ['default skips several disabled matches', null, ['a', 'b', 'c', 'E'], 3, ['a', 'b'], 2],
+      ['every match disabled -> no default, never Eject', null, ['a', 'b', 'E'], 2, ['a', 'b'], -1],
+      ['vanished row falls back to the first pickable', 'x', ['a', 'b', 'E'], 2, ['a'], 1],
+      ['an explicit key on a disabled row is respected', 'a', ['a', 'b', 'E'], 2, ['a'], 0],
+    ] as const)('%s', (_label, activeKey, targetKeys, choiceCount, disabled, expected) => {
+      expect(resolveActiveIndex(activeKey, [...targetKeys], choiceCount, true, new Set(disabled))).toBe(expected)
+    })
+
+    it('does not default-highlight anything with a blank query', () => {
+      expect(resolveActiveIndex(null, ['a', 'b'], 2, false, new Set(['a']))).toBe(-1)
+    })
   })
 })

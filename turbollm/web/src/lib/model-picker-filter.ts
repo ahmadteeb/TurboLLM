@@ -43,17 +43,20 @@ export function moveActiveIndex(key: string, index: number, count: number): numb
 }
 
 /** Where the highlight is now, given the key of the target the user last highlighted.
- *  Follows the row; otherwise the first match while searching, else none. Never lands on
- *  the Eject target (the last of `targetKeys` beyond `choiceCount`) unless it IS `activeKey`. */
+ *  Follows the row (even a disabled one: an explicit choice is respected); otherwise the first
+ *  PICKABLE match while searching, else none. Never lands on the Eject target (the last of
+ *  `targetKeys` beyond `choiceCount`) unless it IS `activeKey`. */
 export function resolveActiveIndex(
   activeKey: string | null,
   targetKeys: string[],
   choiceCount: number,
   hasQuery: boolean,
+  disabledKeys: ReadonlySet<string>,
 ): number {
   const followed = activeKey === null ? -1 : targetKeys.indexOf(activeKey)
   if (followed >= 0) return followed
-  return hasQuery && choiceCount > 0 ? 0 : -1
+  if (!hasQuery) return -1
+  return targetKeys.slice(0, choiceCount).findIndex((key) => !disabledKeys.has(key))
 }
 
 function isMachineNamedBy(group: ModelGroup, tokens: string[]): boolean {

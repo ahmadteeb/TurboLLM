@@ -430,13 +430,59 @@ describe('keyboard', () => {
     expect(onEject).not.toHaveBeenCalled()
   })
 
-  it('explains a highlighted disabled remote row on Enter and keeps menu and query', async () => {
+  it('explains a disabled row the user arrowed onto, on Enter, and keeps menu and query', async () => {
     const { onLoad } = await openMenu({ links: onlineLink(), remoteModels: [remoteRow(false)] })
-    await userEvent.keyboard('workstation{Enter}')
+    await userEvent.keyboard('workstation{ArrowDown}{Enter}')
     expect(toastInfo).toHaveBeenCalledWith(expect.stringMatching(/not loaded on workstation/i))
     expect(onLoad).not.toHaveBeenCalled()
     expect(screen.getByRole('menu')).toBeInTheDocument()
     expect(searchBox()).toHaveValue('workstation')
+  })
+
+  describe('disabled rows and the default highlight', () => {
+    const remoteTwo = (): RemoteModelRow[] => [
+      remoteRow(false),
+      { ...remoteRow(true), model: { ...remoteRow(true).model, key: 'qwen3-8b', name: 'Qwen3 8B' } },
+    ]
+    const remoteOnly = () => ({ models: [], links: onlineLink(), remoteModels: remoteTwo() })
+
+    it('Enter skips a disabled first match and loads the first pickable one', async () => {
+      const { onLoad } = await openMenu(remoteOnly())
+      await userEvent.keyboard('qwen')
+      expect(activeRows()).toEqual([rowOf('Qwen3 8B')])
+      await userEvent.keyboard('{Enter}')
+      expect(onLoad).toHaveBeenCalledWith('workstation/qwen3-8b')
+      expect(toastInfo).not.toHaveBeenCalled()
+    })
+
+    it('Enter is a silent no-op when every match is disabled', async () => {
+      const { onLoad } = await openMenu({ models: [], links: onlineLink(), remoteModels: [remoteRow(false)] })
+      await userEvent.keyboard('qwen')
+      expect(activeRows()).toEqual([])
+      expect(searchBox()).not.toHaveAttribute('aria-activedescendant')
+      await userEvent.keyboard('{Enter}')
+      expect(toastInfo).not.toHaveBeenCalled()
+      expect(onLoad).not.toHaveBeenCalled()
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('arrowing up onto the disabled row then Enter explains it and keeps the menu open', async () => {
+      const { onLoad } = await openMenu(remoteOnly())
+      await userEvent.keyboard('qwen{ArrowUp}{Enter}')
+      expect(toastInfo).toHaveBeenCalledWith(expect.stringMatching(/not loaded on workstation/i))
+      expect(onLoad).not.toHaveBeenCalled()
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
+
+    it('hovering the disabled row then Enter explains it and keeps the menu open', async () => {
+      const { onLoad } = await openMenu(remoteOnly())
+      await userEvent.keyboard('qwen')
+      await userEvent.hover(rowOf('Qwen3 35B'))
+      await userEvent.keyboard('{Enter}')
+      expect(toastInfo).toHaveBeenCalledWith(expect.stringMatching(/not loaded on workstation/i))
+      expect(onLoad).not.toHaveBeenCalled()
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+    })
   })
 
   it('opens settings on Alt+Enter for a local row', async () => {

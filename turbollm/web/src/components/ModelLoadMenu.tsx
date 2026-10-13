@@ -100,7 +100,8 @@ export function ModelLoadMenu({
   const nothingMatches = searching && shown.length === 0
   const targets: PickTarget[] = loadedKey ? [...choices, EJECT_KEY] : choices
   const targetKeys = targets.map(keyOfTarget)
-  const activeIndex = resolveActiveIndex(activeKey, targetKeys, choices.length, searching)
+  const disabledKeys = new Set(choices.filter((c) => c.disabled).map((c) => c.id))
+  const activeIndex = resolveActiveIndex(activeKey, targetKeys, choices.length, searching, disabledKeys)
   const activeDescendantId = activeIndex < 0 ? undefined : domIdOfTarget(idPrefix, activeIndex, choices.length)
 
   useEffect(() => {
