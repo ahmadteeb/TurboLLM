@@ -42,6 +42,11 @@ export type EngineRuntime = {
   error?: EngineError
   port?: number
   pid?: number
+  /** Id of the engine the loaded model actually runs on ('' when none). Not always `id`: a .litertlm model runs on
+   *  LiteRT-LM whichever engine is active. Absent from older daemons. */
+  servingId?: string
+  /** Kind of the engine in `servingId` ('' when none). Absent from older daemons. */
+  servingKind?: string
   /** The exact command last spawned, formatted for copy-paste into a terminal.
    *  Present only while this engine is the one actually running/starting. */
   launchCommand?: string
@@ -1123,7 +1128,8 @@ export type HfSortOption = 'best-match' | 'trending' | 'downloads' | 'likes' | '
 
 /** One logical file in a repo (spec 10 §3): GGUF split parts are grouped into one
  *  entry with summed size and `parts` > 1; safetensors component files each get
- *  their own entry with `safetensors: true`. */
+ *  their own entry with `safetensors: true`; .litertlm bundles each get their own
+ *  self-contained entry with `litertlm: true`. */
 export type HfRepoFile = {
   name: string
   quant: string
@@ -1132,6 +1138,12 @@ export type HfRepoFile = {
   mmproj: boolean
   /** True for safetensors component files (MLX and vLLM repos). */
   safetensors?: boolean
+  /** True for LiteRT-LM bundle files (.litertlm) — one self-contained model per file. */
+  litertlm?: boolean
+  /** For a `.litertlm` bundle: the hardware-variant label ('GPU', 'Mediatek MT6993') —
+   *  the build this bundle targets. `quant` keeps its usual meaning (the precision the
+   *  name states, '?' when none — same as the library), so the two never collide. */
+  variant?: string
   sha256?: string
   url: string
   /** True when this exact repo file was downloaded via TurboLLM and is still on
@@ -1152,6 +1164,10 @@ export type HfRepoDetail = {
   files: HfRepoFile[]
   /** True when the repo is a safetensors model (no GGUFs — covers MLX and vLLM). */
   safetensors?: boolean
+  /** True when the repo ships LiteRT-LM bundles (.litertlm) instead of GGUF/safetensors
+   *  models — `files` then holds one self-contained entry per bundle (the litert-community
+   *  convention: gpu/web/device variants of the same model in one repo). */
+  litertlm?: boolean
   /** True while the daemon is still computing content hashes to confirm whether
    *  size-matching local files are this repo's quants (spec 10 §3). The UI re-polls
    *  until it clears, then the "Downloaded" badges are final. */
