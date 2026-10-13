@@ -8,9 +8,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodeSessionDetail } from '../../lib/code-api'
 import type { ModelEntry } from '../../lib/types'
+
+// Rendering the real screen takes several seconds on a loaded CI box, which the default 5000 ms test
+// timeout does not cover; the assertions themselves stay unchanged.
+vi.setConfig({ testTimeout: 30_000 })
 
 beforeEach(() => {
   const store = new Map<string, string>()
@@ -108,9 +112,16 @@ function sessionDetail(codeAgent?: string): CodeSessionDetail {
   return detail
 }
 
+let CodeSessionScreen: typeof import('./CodeSessionScreen').CodeSessionScreen
+
+// The cold import transforms the whole screen tree, which starves for tens of seconds under load;
+// it gets its own hook timeout so no test timeout has to cover it.
+beforeAll(async () => {
+  ;({ CodeSessionScreen } = await import('./CodeSessionScreen'))
+}, 120_000)
+
 async function renderSession(codeAgent?: string) {
   getCodeSessionMock.mockResolvedValue(sessionDetail(codeAgent))
-  const { CodeSessionScreen } = await import('./CodeSessionScreen')
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const rendered = render(
     <QueryClientProvider client={qc}>

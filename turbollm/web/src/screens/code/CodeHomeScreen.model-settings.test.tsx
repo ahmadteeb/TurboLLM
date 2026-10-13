@@ -5,8 +5,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ModelEntry } from '../../lib/types'
+
+// Rendering the real screen takes several seconds on a loaded CI box, which the default 5000 ms test
+// timeout does not cover; the assertions themselves stay unchanged.
+vi.setConfig({ testTimeout: 30_000 })
 
 beforeEach(() => {
   const store = new Map<string, string>()
@@ -67,8 +71,15 @@ vi.mock('../models/ModelDetailDialog', async () => {
   }
 })
 
+let CodeHomeScreen: typeof import('./CodeHomeScreen').CodeHomeScreen
+
+// The cold import transforms the whole screen tree, which starves for tens of seconds under load;
+// it gets its own hook timeout so no test timeout has to cover it.
+beforeAll(async () => {
+  ;({ CodeHomeScreen } = await import('./CodeHomeScreen'))
+}, 120_000)
+
 async function renderScreen() {
-  const { CodeHomeScreen } = await import('./CodeHomeScreen')
   return render(<MemoryRouter><CodeHomeScreen /></MemoryRouter>)
 }
 
