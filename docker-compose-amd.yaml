@@ -17,7 +17,7 @@ services:
       # port to unauthenticated access.
       - turbollm-data:/root/.turbollm
       # Mount host directory so TurboLLM workspace browser and coding agents can access project files
-      - ${HOME:-/home/ahmadteeb}:${HOME:-/home/ahmadteeb}
+      - ~/workspace:/root/workspace
 
     # --- AMD GPU passthrough (ROCm & Vulkan) ---
     # /dev/kfd is the ROCm kernel driver device; /dev/dri is the DRM/GPU device nodes.

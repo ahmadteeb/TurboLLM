@@ -21,7 +21,7 @@ services:
       # port to unauthenticated access.
       - turbollm-data:/root/.turbollm
       # Mount host directory so TurboLLM workspace browser and coding agents can access project files
-      - ${HOME:-/home/ahmadteeb}:${HOME:-/home/ahmadteeb}
+      - ~/workspace:/root/workspace
 
     # --- NVIDIA GPU passthrough (requires the NVIDIA Container Toolkit on the host) ---
     # Delete this whole "environment" + "deploy" block if you're running CPU-only —
